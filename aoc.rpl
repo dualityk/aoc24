@@ -1,0 +1,129 @@
+(AOC24 by k.)
+
+'::
+  (First, retrieve our input as a list of strings, and discard the final
+   empty line.)
+  "input01" READF POP DROP
+
+  '::
+    (Then, for each line, parse the numbers into separate lists.)
+    ':: >OBJ >INT listB + 'listB STO >INT listA + 'listA STO ;
+    FOREACH DROP
+
+    (Part 1: Read two columns of numbers, sort both, then return the sum of
+             the absolute differences between each line.)
+  
+    (Sort the lists individually.)
+    listA sort 'listA STO
+    listB sort 'listB STO
+
+    (Now obtain the sum of the absolute value of the differences in the lists.)
+    (Our sum, left on stack:) #0
+    (Our index:) listA LEN
+    '::
+      '::
+        (Back through both lists.  Initial LEN points us to one past the end.)
+        idx #1 - 'idx STO        
+        (Fetch an item from each list.)
+        listA idx GET
+        listB idx GET
+        (Find the absolute difference and add to our sum.)
+        - ABS +
+        (Repeat until our index is 0.)
+        idx ;
+      REP ;
+    { idx } LOCAL 
+    "Part one: " SWAP + DISP 
+
+    (Part 2: Count the number of matches in list B of every entry in list A,
+             then sum value*matches for each line.  The fact that we're
+             already sorted will hasten our search.)
+    (Our sum:) #0
+    (Our A-index and also stop value for the B list:) listA LEN DUP #1 -
+    '::
+      '::
+        (Get a test value from the A list.) 
+        listA idx #1 - DUP 'idx STO GET 'itemA STO
+
+        (Now search the B list for matches, if there are any left.)
+        (Our match count:) #0
+        (Which will remain zero if we're out of numbers.) max #0 >=
+        '::
+          '::
+            (Prepare two tests: listB=listA, and listB>=listA.)
+            listB max GET itemA
+            DUP2 == #3 ROLLD >=
+            (If >=, we use the == test as an integer to increment match
+             count, and in either case seek downward.
+             If <, our == is a guaranteed false and falls through to stop REP.)
+            ':: + max #1 - 'max STO 
+              (And leave this truth for REP:) #1 ;
+            IFT
+            (Also make sure we aren't out of list B indices.)
+            max #0 >= AND ;
+          REP ;
+        IFT
+
+        (Now multiply our count and test value, sum it, and loop.)
+        itemA * +
+        idx ;
+      REP 
+      "Part two: " SWAP + DISP ;
+    { :itemA: () max idx } LOCAL ;
+  { :listA: {} :listB: {} } LOCAL ;
+'day01 STO
+
+
+(This routine was developed straight from the algorithm, and I used it
+ for 2023:7, inter alia, where a sort routine was required.)
+'::
+  (This is our local partition routine, which divides the list into two
+   partitions.)
+  '::
+    '::
+      (Make a pivot value in the middle of our part of the array.)
+      list hi lo - #2 / lo + GET EVAL 'pivot STO
+
+      lo #1 - 'lo STO
+      hi #1 + 'hi STO
+      '::
+        (Move the left index right at least once, while the element at that
+         index is less than the pivot.)
+        ':: list lo #1 + DUP 'lo STO GET EVAL pivot < ; REP
+
+        (Move the right index left at least once, while the element at that
+         index is greater than the pivot.)
+        ':: list hi #1 - DUP 'hi STO GET EVAL pivot > ; REP
+
+        lo hi >=
+
+        (If the indices crossed, fall out of the loop and return the 'hi' value.)
+        ':: hi #0 ;
+
+        (Else, swap the elements under our two cursors and repeat.)
+        ':: list hi GET list DUP lo GET
+           hi PUT
+           SWAP lo PUT 'list STO #1 ;
+        IFTE ;
+      REP ; 
+    { hi lo :pivot:#0 } LOCAL ;
+
+  (This is our local recursion routine.  It sorts some or all of the list,
+   divides it into partitions, then sorts those.)
+  '::
+    '::
+      lo #0 >= hi #0 >= AND lo hi < AND
+      '::
+        lo hi partition 'p STO 
+        lo p recurse
+        p #1 + hi recurse ;
+      IFT ;
+    { hi lo :p:() } LOCAL ;
+
+  (This is the local environment into which our subroutines go.  It presents
+   a nicer interface to the user by passing on the full bounds of the list
+   to start 'recurse' instead of making someone else do it.)
+  ':: #0 list LEN #1 - recurse list ; 
+  { recurse partition list } LOCAL ;
+{ EVAL } STATIC
+'sort STO
