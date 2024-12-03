@@ -1,5 +1,95 @@
 (AOC24 by k.)
 
+(Day 2: Nuclear watchdog)
+'::
+  (Retrieve and process our input, turning each line into a numerical list.
+   Here we lean on the parser, which is just as happy to generate a list as
+   it would be a single number.)
+  "input02" READF POP DROP
+  ':: " }" + "{ " SWAP + >OBJ update ; FOREACH
+
+  (Reckon subroutine: evaluate rules ascending and descending together, 
+                      returning the lower number of failures.)
+  '::
+    DUP LEN #1 -
+      '::
+        (Now loop through a single row.)
+        (Our failure counts begin clear:) #0 #0
+        '::
+          (Fetch two adjacent numbers.)
+          row idx DUP2 #1 - GET #3 ROLLD GET
+          (Check that 0<difference<=3.)
+          DUP2 - ABS DUP #0 > SWAP #3 <= AND
+          (In bounds: increment appropriate fail count.)
+          ':: >
+            ':: #1 + ;
+            ':: SWAP #1 + SWAP ;
+            IFTE ;
+          (Out of bounds: drop both numbers and increment both fail counts.)
+          ':: DROP DROP #1 + SWAP #1 + SWAP ;
+          IFTE
+          (Continue until we're out of numbers.)
+          idx #1 - DUP 'idx STO ; 
+        REP 
+        (Finally, return the lesser of the two results.)
+        DUP2 < #3 ROLLD IFTE ;
+      { idx row } LOCAL ;
+
+  ':: 
+    (Part 1: Tally the lines in which the delta between numbers is 1-3, and
+             everything is moving the same direction.)
+    (Our tally starts at zero:) #0
+    (Start at the bottom of the list:) input LEN
+    '::
+      '::
+        (Decrement our row index.)
+        row #1 - 'row STO
+        (Get and test a row.)
+        input row GET reckon
+        (Tally zero-error rows, and save a list of rows with 1 or 2 errors;
+         any more will be an incorrectible error.)
+        DUP
+        ':: #2 <=
+          ':: unsafe input row GET #1 >LST + 'unsafe STO ;
+          IFT ;
+        ':: NOT + ;
+        IFTE
+        row ;
+      REP ;
+    { row } LOCAL
+    (Record our guaranteed safe count to add to part 2.)
+    DUP 'safe STO
+    "Part 1: " SWAP + DISP
+
+    (Part 2: Tally the lines in which removing a single value will render
+             the condition safe.)
+    (Again our tally starts at zero:) #0
+    (Start at the bottom of our new, smaller list:) unsafe LEN
+    '::
+      '::
+        (Decrement row index and get next row.)
+        row #1 - 'row STO
+        (Excise each element in turn and re-test.)
+        unsafe row GET DUP LEN #1 -
+        '::
+          ':: thisrow idx edit reckon 
+            (Still unsafe, decrement and loop.)
+            ':: idx DUP #1 - 'idx STO ;
+            (Found a safe one, increment safe count and stop.)
+            ':: #1 + #0 ;
+            IFTE ;
+          REP ;
+        { idx thisrow } LOCAL
+        row ;
+      REP ;
+    { row } LOCAL 
+    (And add to our safe count from part 1 to get our final result.)
+    safe + "Part 2: " SWAP + DISP ;
+  { reckon input :unsafe: {} :safe: #0 } LOCAL ;
+'day02 STO
+
+
+(Day 1: Arguing with historians)
 '::
   (First, retrieve our input as a list of strings, and discard the final
    empty line.)
@@ -74,6 +164,8 @@
 'day01 STO
 
 
+(General routines)
+
 (This routine was developed straight from the algorithm, and I used it
  for 2023:7, inter alia, where a sort routine was required.)
 '::
@@ -127,3 +219,14 @@
   { recurse partition list } LOCAL ;
 { EVAL } STATIC
 'sort STO
+
+
+(Edit a single item out of a list.)
+'::
+  '::
+    (Cut to left of index.)
+    DUP idx LEFT
+    (Cut to right of index and stitch together.)
+    SWAP DUP LEN idx - #1 - RIGHT + ;
+  { idx } LOCAL ;
+'edit STO
