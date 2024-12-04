@@ -1,5 +1,106 @@
 (AOC24 by k.)
 
+(Day 3: IT'S PARSE TIME BOYS)
+':: 
+  (Fetch our input into a list of strings, as usual.)
+  "input03" READF POP DROP
+  
+  (advance: This routine advances the cursor through the current text,
+   and both records and returns the !EOL flag.)
+  ':: cursor + DUP 'cursor STO
+     text LEN < DUP 'eol STO ;
+
+  (evaliftrue: Given a boolean and an object, either evaluate it or return 
+   false.  The kids call this syntactic sugar.)
+  ':: #0 IFTE ;
+  
+  (getdigits: Acquire up to three consecutive numerals, and return as a
+   string if successful.  Trailing garbage is gleefully ignored.)
+  '::
+    text cursor GET DUP isnumeral
+    '::
+      (We have already succeeded.  Keep our digit and try for 1-2 more.)
+      #1 advance
+      ':: text cursor GET DUP isnumeral
+        ':: + #1 advance 
+          ':: text cursor GET DUP isnumeral 
+            ':: + #1 advance ;
+            IFT DROP ;
+          'DROP IFTE ;
+        'DROP IFTE ;
+      'DROP IFTE
+      (We succeeded:) #1 ;        
+    (We failed: the first digit was not a numeral.)
+    ':: DROP #0 ;
+    IFTE ;
+  
+  (rules: These are the rules for matching a mul instruction.  They must all 
+   be met, in order, to generate a valid instruction.)
+  { ::
+      (First, it must start with "mul(".)
+      text cursor DUP #3 + SUBS "mul(" == 
+      (If it doesn't, the cursor must still be advanced by one character.)
+      DUP NOT ':: #1 advance DROP ; IFT ;
+    ::
+      #4 advance
+      (The next thing has to be a number.)
+      ':: getdigits 
+        (If there were digits, store them and proceed!)
+        ':: >INT 'leftmul STO #1 ;
+        evaliftrue ; 
+      evaliftrue ;
+    ::
+      (Then a comma...)
+      eol ':: text cursor GET "," == ; evaliftrue ; 
+    ::
+      #1 advance
+      (Then another number.) 
+      ':: getdigits
+        (Store these digits too.)
+        ':: >INT 'rightmul STO #1 ;
+        evaliftrue ;
+      evaliftrue ;
+    ::
+      (And finally, a close paren.)
+      eol ':: text cursor GET ")" == ; evaliftrue ;
+    ::
+      (A victory dance for the successful.)
+      #1 advance DROP
+      (Do the multiplication if enabled.)
+      enable
+      ':: leftmul rightmul * total + 'total STO ;
+      IFT
+      (And tell the world of our triumph.)
+      #1 ; }  
+  
+  ':: (Process one line of text.)
+    ':: 
+      '::
+        (Don't actually care what the result is from replst; we're just
+         chucking text at the rules until we hit the end of line.)
+        rules replst DROP
+        eol ;
+      REP ;
+    { rules text :cursor: #0 :eol: #1 :leftmul: #0 :rightmul: #0 } LOCAL ;
+  
+  '::
+     (Part one: just the multiplication things, please.)
+     input ':: rules parsestring ; FOREACH DROP "Part 1: " total + DISP 
+     
+     (Part two: add a couple of rules to the top of our parser to enable 
+      and disable tallying as needed, then do this whole thing again.)
+     #0 'total STO
+     { :: text cursor DUP #3 + SUBS "do()" == 
+         ':: #1 'enable STO #4 advance DROP ; IFT #1 ;
+       :: text cursor DUP #6 + SUBS "don't()" ==
+         ':: #0 'enable STO #7 advance DROP ; IFT #1 ; }
+     rules + 'rules STO
+     input ':: rules parsestring ; FOREACH DROP "Part 2: " total + DISP ;
+  { parsestring rules getdigits evaliftrue advance input 
+    :enable: #1 :total: #0 } LOCAL ;
+'day03 STO
+
+
 (Day 2: Nuclear watchdog)
 '::
   (Retrieve and process our input, turning each line into a numerical list.
@@ -230,3 +331,26 @@
     SWAP DUP LEN idx - #1 - RIGHT + ;
   { idx } LOCAL ;
 'edit STO
+
+
+(Evaluate the contents of a list in order, advancing after each list item
+ which returns true, and stopping for the first item which returns false. 
+ Returns true if each element also returned true.)
+'::
+  DUP LEN
+  '::
+    ':: 
+      (Evaluate a list item.)
+      _list _idx GETE DUP
+      (Increment index and see if we a. succeeded and b. are not done.)
+      _idx #1 + DUP '_idx STO _max < AND
+      (Only pass our result on if we're leaving.)
+      DUP 'DROP IFT ;
+    REP ;
+  { :_idx: #0 _max _list } LOCAL ;
+'replst STO
+
+
+(Take a gander to see if a character is numeric.)
+':: { "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" } SWAP HAS ;
+'isnumeral STO
