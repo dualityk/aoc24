@@ -1,5 +1,122 @@
 (AOC24 by k.)
 
+(Day 4: Word Girl)
+'::
+  (Fetch our input, and record its dimensions.)
+  "input04" READF POP DROP
+  (First get the Y dimension.)
+  DUP LEN 
+  (Then the X dimension.  Leaves us with the list, ymax, and xmax.  The
+   latter two are duplicated as starting coordinates for our search later.)
+  SWAP DUP #0 GET LEN #3 ROLL DUP2
+
+  (deltas: Here are the eight directions we can go, expressed as X-Y 
+   deltas, along with the most efficient bounds check for each. The elements
+   are stored as code so they automatically expand onto the stack when GETEd.)
+  { :: (N)   #0 #-1 ':: y #0 >= ; ;
+    :: (NE)  #1 #-1 ':: y #0 >= x xmax < AND ; ;
+    :: (E)   #1  #0 ':: x xmax < ; ;
+    :: (SE)  #1  #1 ':: x xmax < y ymax < AND ; ;
+    :: (S)   #0  #1 ':: y ymax < ; ;
+    :: (SW) #-1  #1 ':: x #0 >= y ymax < AND ; ;
+    :: (W)  #-1  #0 ':: x #0 >= ; ;
+    :: (NW) #-1 #-1 ':: x #0 >= y #0 >= AND ; ; }
+  
+  (chase: Chase in one direction after a word, and return a success boolean.
+   It accepts an index for the match string, normally #1 unless recursing,
+   and assumes the first letter is already determined to be correct.) 
+  '::
+    (Succeed if the end of the string has been reached.)
+    DUP match LEN ==
+    ':: DROP #1 ;
+    '::
+      (Otherwise, move the cursor temporarily.)
+      x xdir + y ydir +
+      '::
+        (Fail if we left the map.)
+        inbounds
+        ':: 
+          (We're still in bounds: how's our letter lookin'?)
+          map y GET x GET match cursor GET ==
+          (If it's good, advance cursor and recurse.  Otherwise fail out.)
+          ':: cursor #1 + chase ; #0 IFTE ;
+        #0 IFTE ;
+      { y x cursor } LOCAL ;
+    IFTE ;
+  
+  (spin: From a given spot on the map, return the sum of matches after
+   fanning out in every direction in our deltas list.)
+  '::
+    (Our sum:) #0
+    deltas LEN
+    '::
+      '::
+        (Step back through the list.) 
+        deltas idx #1 - DUP 'idx STO GETE
+        (Temporarily bind the particulars about our chosen direction,
+         and chase.)
+        ':: #1 chase ; { inbounds ydir xdir } LOCAL
+        (Add to our sum and repeat as needed.)
+        + idx ;
+      REP ;
+    { idx } LOCAL ;
+  
+  ':: 
+    (Part 1: finding all the ecksmases.)
+    (We start with no ecksmas at all:) #0
+    '::
+      (Decrement Y position.) y #1 - 'y STO
+      (Reset X.) xmax 'x STO
+      '::
+        (Get our current line.)
+        map y GET
+        (Decrement X position and get our current character.)
+        x #1 - DUP 'x STO GET
+        (If the first letter matches, fan out from here and get a sum of
+         complete matches to add to the list.)
+        match #0 GET ==
+        ':: spin + ; IFT
+        x ;
+      REP y ; 
+    REP
+    "Part 1: " SWAP + DISP
+
+    (Part 2: finding all the X-mases.  This loop differs from part 1 in 
+     that it avoids the borders of the map, and it's looking for the middle
+     letter instead of the first.)
+    (We start with no Xes at all:) #0
+    (Adjust our borders inward by 2, since our decrements are now at the
+     end of their respective loops.  And also reset Y from part 1.)
+    xmax #2 - 'xmax STO ymax #2 - DUP 'ymax STO 'y STO
+    '::
+      (Reset X.) xmax 'x STO
+      '::
+        (Get our current character and see if it's the middle one.)
+        map y GET x GET "A" ==
+        '::
+          (We don't actually care about direction, just that the letters
+           S and M are diagonal to one another both ways.  One solution
+           is to see if their ASCII values sum to 160.)
+          (Get / characters.)
+          map y #1 - GET x #1 + GET ASC>
+          map y #1 + GET x #1 - GET ASC> + #160 ==
+          (Get \ characters.)
+          map y #1 - GET x #1 - GET ASC>
+          map y #1 + GET x #1 + GET ASC> + #160 ==
+          (Add 1 to our count if both these things are true.)
+          AND + ;
+        IFT
+        (Decrement X position.  Putting it down here skips column 0.)
+        x #1 - DUP 'x STO ;
+      REP 
+      (Decrement Y position.  Putting it down here skips row 0.) 
+      y #1 - DUP 'y STO ; 
+    REP
+    "Part 2: " SWAP + DISP ;
+  { spin chase deltas x y xmax ymax map :match: "XMAS" } LOCAL ;
+'day04 STO
+
+
 (Day 3: IT'S PARSE TIME BOYS)
 ':: 
   (Fetch our input into a list of strings, as usual.)
@@ -91,9 +208,9 @@
       and disable tallying as needed, then do this whole thing again.)
      #0 'total STO
      { :: text cursor DUP #3 + SUBS "do()" == 
-         ':: #1 'enable STO #4 advance DROP ; IFT #1 ;
+         ':: #1 'enable STO #4 advance DROP #0 ; #1 IFTE ;
        :: text cursor DUP #6 + SUBS "don't()" ==
-         ':: #0 'enable STO #7 advance DROP ; IFT #1 ; }
+         ':: #0 'enable STO #7 advance DROP #0 ; #1 IFTE ; }
      rules + 'rules STO
      input ':: rules parsestring ; FOREACH DROP "Part 2: " total + DISP ;
   { parsestring rules getdigits evaliftrue advance input 
