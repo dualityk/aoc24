@@ -1,5 +1,146 @@
 (AOC24 by k.)
 
+(Day 5: Every technical manual project ever, I'm sure)
+'::
+  (Today's input comes in two parts.)
+  "input05" READF
+
+  (mklist: Given a delimiter string, make a list of lists of integers.
+   This is the common procedure for both halves of our input data.) 
+  '::
+    '::
+      (Our list starts blank:) {}
+      '::
+        (Get a line and split it around our delimiter.)
+        input idx GET delimiter SPLIT 
+        (Update the line with strings converted to integers.)
+        ':: >INT update ; FOREACH
+        (Drop our list into a list, and concatenate.)
+        #1 >LST +
+        (Advance idx and stop if we get to a null string.)
+        input idx #1 + DUP 'idx STO GET "" != ;
+      REP ;
+    { delimiter } LOCAL 
+    (After we're done with a part, advance past the blank line.)
+    idx #1 + 'idx STO ;
+    
+  (Actually parse the input here and leave it on the stack.)  
+  '::
+    (The first half of our data is separated by "|".)
+    "|" mklist
+    (The second half is separated by ",".)
+    "," mklist ; 
+  { mklist input :idx: #0 } LOCAL 
+  
+  (Now that we have machine readable data, it's named here.)
+  '::
+    (For this section, we're going to build a semi-sparse lookup table:
+     every 'before' page will have a 100-entry bitmap which will have a flag
+     for every 'after' rule.)     
+    (One page's empty map:)
+    { #0 } #100 *
+    (And one hundred pages:)
+    #1 >LST #100 *
+    (Now build the table right on the stack.)
+    rules LEN 
+    '::
+      '::
+        (Decrement index and get a rule.)
+        rules idx #1 - DUP 'idx STO GET
+        (Retrieve both sides, and line up our stack.  This leaves us with
+         the 'after' index, 'before' index, all the rules, and the bitmap.)
+        OBJ> DROP SWAP
+        #3 ROLL SWAP DUP2 GET
+        (Now bring in a flag, roll the 'after' index into place and put it
+         all back.)
+        #1 #5 ROLL PUT SWAP PUT
+        idx ;
+      REP ;
+    { idx } LOCAL
+
+    (validate: To validate a single manual, we start at the end, and
+     progressively validate each page against the rest of the list.)
+    '::
+      (Grab its number of pages -- we start second from the end.)
+      DUP LEN #1 -
+      '::
+        (We start out good:) #1
+        '::
+          (Grab the rules map for the previous page, and a list of pages 
+           from here to the end.)
+          ruletable manual 
+          idx #1 -
+          GET GET manual idx heretoend
+          DUP LEN
+          (Validate just the rest of the manual from this page.)
+          '::
+            '::
+              (Get the next page to check from our search list.)
+              map searchlist idx #1 - DUP 'idx STO GET 
+              (Get the rule from the map, and see if we're good..)
+              GET AND DUP
+              (Repeat so long as there are more indices and no failures.)
+              ':: DUP idx AND ;
+              (If there is a failure, hand our index back.)
+              ':: DROP idx #0 #0 ;
+              IFTE ;
+             REP ;
+          { idx searchlist map } LOCAL
+          (Repeat until all pages are checked, if no failures.)
+          DUP
+          ':: idx #1 - DUP 'idx STO ;
+          (If there was a failure, return our failed indices.)
+          ':: DROP idx + idx #1 - #0 #0 ; 
+          IFTE ;
+        REP ;
+      { idx manual } LOCAL ;
+      
+    manuals LEN 
+    ':: 
+      (Our tally for valid manuals begins here:) #0
+      ':: 
+        (Grab the next manual from the library, and validate it.)
+        manuals idx #1 - DUP 'idx STO GET 
+        (Also hang onto the manual in case of success.)
+        DUP validate
+        (NOW THEN.  If our manual is correct, unfold it to the middle and
+         see what the page number is, and add it to our tally.) 
+        ':: DUP LEN #1 - #2 / GET + ;
+        (Otherwise, add it to our incorrect list for the next section.)
+        ':: DROP DROP incorrect SWAP #1 >LST + 'incorrect STO ;
+        IFTE
+        idx ;
+      REP 
+      "Part one: " SWAP + DISP
+
+      (Now for part 2, yeeey.  This part is similar, except it listens to
+       the validator's specific complaints about page order, and tries to
+       please it.)
+      incorrect LEN 'idx STO
+      (Our tally again begins here:) #0
+      '::
+        (Grab the next manual.)
+        incorrect idx #1 - DUP 'idx STO GET
+        '::
+          (Save the manual and validate it.) 
+          DUP validate 
+          ':: (It's valid, so it's time to stop.) #0 ;
+          ':: (It's invalid, so rearrange the failed pages and try again.)
+             swapelements #1 ;
+          IFTE ;
+        REP 
+        (Once the terms are rearranged to the machine's satisfaction,
+         unfold it again as before.)
+        DUP LEN #1 - #2 / GET +
+        idx ;
+      REP
+      "Part two: " SWAP + DISP
+      ;
+    { idx validate ruletable :incorrect: {} } LOCAL ;
+  { manuals rules } LOCAL ;
+'day05 STO
+
+
 (Day 4: Word Girl)
 '::
   (Fetch our input, and record its dimensions.)
@@ -471,3 +612,15 @@
 (Take a gander to see if a character is numeric.)
 ':: { "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" } SWAP HAS ;
 'isnumeral STO
+
+
+(Grab from some point to the end of a list or string.)
+':: SWAP DUP LEN #1 - #3 ROLL SWAP SUBS ;
+'heretoend STO
+
+
+(Swap two elements in a list.)
+'::
+  ':: list DUP x GET list y GET #3 ROLL SWAP x PUT SWAP y PUT ;
+  { x y list } LOCAL ;
+'swapelements STO
