@@ -1,5 +1,345 @@
 (AOC24 by k.)
 
+(Day 7: Doing math by a bridge)
+'::
+  (Fetch the input data.)
+  "input07" READF POP DROP
+
+  (Process the list into lines of the form { result term1 term2 ... }.)
+  '::
+    (First break the line around the colon.)
+    ":" SPLIT OBJ> DROP
+    (The second part of the line is our list of terms.  Strip the leading
+     space, then make them ints.)
+    #1 heretoend " " SPLIT
+    ':: >INT update ; FOREACH
+    (Reverse the order of the terms.)
+    revlst
+    (Turn the result into an int as well, combine the list and update.)
+    SWAP >INT SWAP + 
+    update ;
+  FOREACH
+      
+  (mkoperators: Given a number of operators to generate, and a start value,
+   progressively pick between / and * and return code.  This is just
+   glorified decimal to binary (the glory being it can do other bases.)
+  '::
+    '::
+      (Our blank code:) ':: ;
+      '::
+        (Grab our start value, check the remainder, then divide it down.)
+        SWAP DUP base MOD SWAP base / SWAP
+        (For trinary operations, the line is only valid if at least one
+         'concat' is generated: we already know the original test are bad.)
+        DUP #2 == 'trinaryok STO
+        (Pick the appropriate value from the operators list and append.)
+        operators SWAP GET #3 ROLL +
+        bits #1 - DUP 'bits STO ;
+      REP
+      (Get rid of our accumulated result, hand back just the code.)
+      SWAP DROP 
+      (And the validity flag.) trinaryok ;
+    { bits :trinaryok: #0 } LOCAL ;
+  
+  (combinations: Generate a list of operator combinations for between 2 and
+   11 binary operators, the range represented by our input.  Accepts a list
+   of possible operators.)
+  '::
+    (Record the number base we're working in.)
+    DUP LEN 
+    '::
+      (The main list begins here:) { {} } #12 *
+      '::
+        (The sub-list begins here:) {}
+        base idx ^
+        '::
+          (Decrement and generate a new combination.)
+          #1 - DUP idx mkoperators
+          (For base 3, drop any test that fails to contain a concat.)
+          base #3 != OR
+          ':: #3 ROLL + ;
+          ':: #3 ROLL DROP ; 
+          IFTE
+          (Reset the stack and repeat until we reach zero.)
+          SWAP DUP ;
+        REP
+        (Discard the counter, then insert the new sub-list into the main list.)
+        DROP idx PUT
+        idx #1 - DUP 'idx STO 
+        (Keep going until we leave the range we care about.)
+        #1 != ; 
+      REP ; 
+    { base operators :idx: #11 } LOCAL ;
+  
+  (ckline: Check one line against its possible combination of operators.)
+  '::
+    (First get the right list of combinations for the needed quantity of
+     operators.)
+    DUP LEN #2 - combos SWAP GET 
+    (And the size of that list.)
+    DUP LEN
+    '::
+      (By default our result is false:) #0
+      '::
+        (Expand the terms from our line, discarding its length.)
+        line OBJ> DROP
+        (Decrement our index and run the next combination.)
+        ourcombos idx #1 - DUP 'idx STO GETE
+        (Update our success flag; stop repeating if successful or no more
+         indices.)
+        == OR DUP NOT idx AND ;
+      REP ;
+    { idx ourcombos line } LOCAL ;
+    
+  (concat: Take the space out between two integers.)
+  ':: >STR SWAP >STR #1 heretoend + >OBJ ;
+
+  '::
+    (Part one: go through the list and sum the things which could be true.)
+
+    (Our sum starts here:) #0
+    
+    (First, build the list of tests: our operators are * and +.)
+    { :: `* ; :: `+ ; } combinations
+    
+    (Then check each line in turn to see if it's any good.)
+    input LEN
+    '::
+      '::
+        input idx #1 - DUP 'idx STO GET
+        ckline
+        ':: (Success: add the result to our tally.)
+          input idx GET #0 GET + ;
+        ':: (Failure: add the equation to our fail list.)
+          input idx GET #1 >LST badeqs + 'badeqs STO ;
+        IFTE
+        idx ;
+      REP ;
+    { idx combos } LOCAL 
+  
+    (Our sum continues from the previous part.)
+    DUP "Part 1: " SWAP + DISP
+    
+    (Part 2: What if there was a whole new kind of operator?)
+    (Now, build a list of tests including the new thing.)
+    { :: `* ; :: `+ ; :: concat ; } combinations
+
+    (Then check each previously bad line in turn to see if it's any good.)
+    (This is a bad and slow method.  I'm not sure how to fix that.  Part of
+     its slowness is because concat is slow, but mostly it's because 2048
+     tests, 2^11 is a lot less than 177k tests, 3^11, even with duplicates
+     removed.)
+    badeqs LEN
+    '::
+      '::
+        badeqs idx #1 - DUP 'idx STO GET
+        ckline
+        ':: (Success: add the result to our tally.)
+          badeqs idx GET #0 GET + ;
+        IFT
+        idx ;
+      REP ; 
+    { idx combos } LOCAL
+    "Part 2: " SWAP + DISP ;
+  { concat ckline combinations mkoperators input :badeqs: {} } LOCAL ;
+'day07 STO
+
+
+(Day 6: Meandering through a maze)
+'::
+  (Fetch the input data.)
+  "input06" READF POP DROP
+  
+  (objects: Evaluating a square will cause something to happen.  These
+   things originally needed to be in place early because the input data is
+   turned into them.)
+  [dir: 
+  
+    :empty: 
+    :: (Empty spaces become full spaces, and suck the guard in.)
+      map x y 'objects.touched put2d 'map STO
+      (Add our location to the unique steps list.)
+      uniquesteps x y #2 >LST #1 >LST + 'uniquesteps STO
+      x y evalsquare ;
+    :touched:
+    :: (Touched spaces just suck the guard in.)
+      x 'xcursor STO y 'ycursor STO #1 ;
+    :obstacle: 
+    :: (Obstacles cause the guard to change direction without moving.)
+      spinguard #1 ; ]
+      
+  (moves: Guard's available motions.)
+  { :: (N) xcursor ycursor #1 - ;
+    :: (E) xcursor #1 + ycursor ;
+    :: (S) xcursor ycursor #1 + ;
+    :: (W) xcursor #1 - ycursor ; }
+
+  (evalsquare: Evaluate a given square.  Accepts x,y coordinates and
+   returns false if the requested square is out of bounds; the square
+   itself is responsible for returning true.)
+  '::
+    ':: 
+      (Check for bounds before dispatching.)
+      x #0 >= y #0 >= AND
+       ':: x xbound < y ybound < AND
+        ':: map y GET x GETE ;
+        #0 IFTE ;
+      #0 IFTE ;
+    { y x } LOCAL ;
+
+  (spinguard: Pick next orientation.)
+  ':: orientation #1 + DUP #4 < * 'orientation STO ;
+
+  '::
+    (Record the size of the map.)
+    map DUP LEN 'ybound STO
+    DUP #0 GET LEN 'xbound STO
+    
+    (And rewrite it into a list of symbols.)
+    '::
+      (Replace each line from the input with a list of square behaviors.)
+      '::
+        (Aforementioned list:) {}
+        ':: 
+          (Pick from the options.  ^ is a special case that records our
+           guard's start position.)
+          text cursor GET 
+          { { :: "." == ; 'objects.empty }
+            { :: "#" == ; 
+              ::
+                (Record a list of obstacles for part 2.)
+                obstacles cursor idx #2 >LST #1 >LST +
+                'obstacles STO
+                'objects.obstacle ; }
+            { :: "^" == ; 
+              :: cursor 'startx STO
+                 (idx is set here by FOREACH.)
+                 idx 'starty STO
+                 'objects.empty ; } }
+          KCASE
+          (Append the symbol to our list and move on.)
+          +
+          cursor #1 + DUP 'cursor STO xbound < ;
+        REP
+        (Write the new list back, gradually overwriting the input text.)
+        update ;
+      { text :cursor: #0 } LOCAL ;
+    FOREACH 'map STO
+
+    (Part one: find the unique squares the guard visits.)
+    '::
+      (First land on the initial square.)
+      xcursor ycursor evalsquare DROP
+      (Then walk around until we fall off the map.)
+      ':: moves orientation GETE evalsquare ; REP
+      "Part one: " uniquesteps LEN + DISP ;
+    { :loopcount: #0 :orientation: #0 
+      :xcursor: startx :ycursor: starty } LOCAL
+    
+    (Part two: where time becomes a loop.)
+    '::
+      (seekobstacle: For a given starting position, and move, return the
+       position of the next obstacle and True, or False if there is none.)
+      '::
+        '::
+          (Move as directed.)
+          move 'ycursor STO 'xcursor STO
+          (Check for bounds.)
+          xcursor #0 >= ycursor #0 >= AND
+           ':: 
+             xcursor xbound < ycursor ybound < AND
+             '::  
+               (Bounded: did we hit anything?)
+               map ycursor GET xcursor GET 'objects.obstacle ==
+               '::
+                 (Yes: record our cursor, and tell REP to stop.)
+                 xcursor ycursor #2 >LST #0 ;
+               ':: (No: keep searching.) #1 ;
+               IFTE ;
+             '::
+               (Left map, return null list and tell REP to stop.)
+               {} #0 ;
+             IFTE ;
+           ':: 
+             (Left map, return null list and tell REP to stop.)
+             {} #0 ;
+           IFTE ;   
+        REP ;
+      { move ycursor xcursor } LOCAL ;
+    
+    (tports: A second map containing obstacle teleport data.)
+    { {} } xbound * #1 >LST ybound *
+    
+    (castrays: Build a list of the next obstacles hit when coming at this
+     one from every cardinal direction.)          
+    '::
+      '::
+        tports
+        (Northbound, so start a square south and go east:)
+        moves #2 GETE moves #1 GET seekobstacle
+        (Eastbound, start a square west and go south:)
+        moves #3 GETE moves #2 GET seekobstacle
+        (Southbound, start a square north and go west:)
+        moves #0 GETE moves #3 GET seekobstacle
+        (Westbound, start a square east and go north:)
+        moves #1 GETE moves #0 GET seekobstacle
+        #4 >LST
+        (Record teleport data.)
+        xcursor ycursor #3 ROLL put2d 'tports STO ;
+      { ycursor xcursor } LOCAL ;
+    
+    (The main search section.)
+    '::
+      "casting" DISP
+      (Cast rays from each obstacle and update its teleport map.)
+      obstacles
+      ':: OBJ> DROP castrays ;
+      FOREACH DROP
+      "seeking" DISP
+      uniquesteps LEN
+      '::
+        '::
+          (Local copies of the map and teleports.)
+          map tports
+          (Get the next obstacle position.)
+          idx #1 - DUP 'idx STO uniquesteps GET OBJ> DROP
+
+          '::
+            (Modify our map with the new obstacle.)
+            map hitx hity 'objects.obstacle put2d 'map STO
+            (Cast rays out from this obstacle.)
+            hitx hity castrays
+            (And update the teleport data for any obstacles pointed at us.)
+            hitx hity absorbrays
+            
+            (Now seek north from the start position until hitting an obstacle.)
+            startx starty
+            '::
+              xcursor ycursor moves orientation GET seekobstacle ;
+            { ycursor xcursor } LOCAL
+            
+            (Bounce around til we leave the map.)
+            ':: boing #1 + 'boing STO
+              tports SWAP OBJ> DROP get2d orientation GET
+              DUP
+              (If the list for our given orientation is not null, advance
+               orientation and repeat.  Otherwise our DUP'd value will tell REP
+               to stop.)
+              ':: spinguard ; IFT ;
+            REP
+            "boing" boing + DISP ;
+          { tports map hity hitx :hitoriented: () :hit: #0 :orientation: #0 } LOCAL 
+          idx ;
+        REP ;
+      { idx } LOCAL ;
+    { castrays tports seekobstacle :boing: #0 } LOCAL ;
+    
+  { spinguard evalsquare moves objects map
+    :startx: #0 :starty: #0 :xbound: #0 :ybound: #0 
+    :uniquesteps: {} :obstacles: {} } LOCAL ;
+'day06 STO
+
+
 (Day 5: Every technical manual project ever, I'm sure)
 '::
   (Today's input comes in two parts.)
@@ -130,12 +470,11 @@
           IFTE ;
         REP 
         (Once the terms are rearranged to the machine's satisfaction,
-         unfold it again as before.)
+         unfold the manual as before to add to the tally.)
         DUP LEN #1 - #2 / GET +
         idx ;
       REP
-      "Part two: " SWAP + DISP
-      ;
+      "Part two: " SWAP + DISP ;
     { idx validate ruletable :incorrect: {} } LOCAL ;
   { manuals rules } LOCAL ;
 'day05 STO
@@ -624,3 +963,21 @@
   ':: list DUP x GET list y GET #3 ROLL SWAP x PUT SWAP y PUT ;
   { x y list } LOCAL ;
 'swapelements STO
+
+
+(Put a thing into a 2D list.)
+'::
+  (Quote the thing so it doesn't get evaluated.) QUOTE
+  ':: DUP y GET thing x PUT y PUT ; { thing y x } LOCAL ;
+'put2d STO
+
+(Get thing from a 2d list.)
+'::
+  ':: list y GET x GET ; { y x list } LOCAL ;
+'get2d STO
+
+(Reverse a list.  This blows up a list and reassembles it,
+ using the ability to multiply code.)
+'::
+  OBJ> ':: SWAP + ; SWAP * {} SWAP EVAL ;
+'revlst STO
