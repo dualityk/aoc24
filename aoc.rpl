@@ -29,17 +29,15 @@
       '::
         (Grab our start value, check the remainder, then divide it down.)
         SWAP DUP base MOD SWAP base / SWAP
-        (For trinary operations, the line is only valid if at least one
-         'concat' is generated: we already know the original test are bad.)
-        DUP #2 == 'trinaryok STO
         (Pick the appropriate value from the operators list and append.)
         operators SWAP GET #3 ROLL +
         bits #1 - DUP 'bits STO ;
       REP
       (Get rid of our accumulated result, hand back just the code.)
       SWAP DROP 
-      (And the validity flag.) trinaryok ;
-    { bits :trinaryok: #0 } LOCAL ;
+      (And the validity flag.) ;
+    { bits } LOCAL ;
+  STATICN
   
   (combinations: Generate a list of operator combinations for between 2 and
    11 binary operators, the range represented by our input.  Accepts a list
@@ -55,11 +53,7 @@
         '::
           (Decrement and generate a new combination.)
           #1 - DUP idx mkoperators
-          (For base 3, drop any test that fails to contain a concat.)
-          base #3 != OR
-          ':: #3 ROLL + ;
-          ':: #3 ROLL DROP ; 
-          IFTE
+          #3 ROLL + 
           (Reset the stack and repeat until we reach zero.)
           SWAP DUP ;
         REP
@@ -70,6 +64,7 @@
         #1 != ; 
       REP ; 
     { base operators :idx: #11 } LOCAL ;
+  STATICN
   
   (ckline: Check one line against its possible combination of operators.)
   '::
@@ -90,10 +85,12 @@
         == OR DUP NOT idx AND ;
       REP ;
     { idx ourcombos line } LOCAL ;
+  STATICN
     
   (concat: Take the space out between two integers.)
   ':: >STR SWAP >STR #1 heretoend + >OBJ ;
-
+  STATICN
+  
   '::
     (Part one: go through the list and sum the things which could be true.)
 
@@ -187,8 +184,15 @@
       #0 IFTE ;
     { y x } LOCAL ;
 
-  (spinguard: Pick next orientation.)
-  ':: orientation #1 + DUP #4 < * 'orientation STO ;
+  (spin: Pick next orientation.)
+  ':: #1 + #4 MOD ;
+
+  (spinguard: Rotate the guard specifically.)
+  ':: orientation spin 'orientation STO ;
+
+  (bounded: Default bounds check to make sure stack coordinates are in the map.)
+  ':: DUP #0 >= SWAP ybound < AND
+    SWAP DUP #0 >= SWAP xbound < AND AND ;
 
   '::
     (Record the size of the map.)
@@ -243,27 +247,21 @@
       '::
         '::
           (Move as directed.)
-          move 'ycursor STO 'xcursor STO
+          move DUP2 'ycursor STO 'xcursor STO
           (Check for bounds.)
-          xcursor #0 >= ycursor #0 >= AND
-           ':: 
-             xcursor xbound < ycursor ybound < AND
-             '::  
-               (Bounded: did we hit anything?)
-               map ycursor GET xcursor GET 'objects.obstacle ==
-               '::
-                 (Yes: record our cursor, and tell REP to stop.)
-                 xcursor ycursor #2 >LST #0 ;
-               ':: (No: keep searching.) #1 ;
-               IFTE ;
-             '::
-               (Left map, return null list and tell REP to stop.)
-               {} #0 ;
-             IFTE ;
-           ':: 
-             (Left map, return null list and tell REP to stop.)
-             {} #0 ;
-           IFTE ;   
+          bounded
+          '::  
+            (Bounded: did we hit anything?)
+            map ycursor GET xcursor GET 'objects.obstacle ==
+            '::
+              (Yes: record our cursor, and tell REP to stop.)
+              xcursor ycursor #2 >LST #0 ;
+            ':: (No: keep searching.) #1 ;
+            IFTE ;
+          '::
+            (Left map, return null list and tell REP to stop.)
+            {} #0 ;
+          IFTE ;
         REP ;
       { move ycursor xcursor } LOCAL ;
     
@@ -275,42 +273,97 @@
     '::
       '::
         tports
-        (Northbound, so start a square south and go east:)
-        moves #2 GETE moves #1 GET seekobstacle
-        (Eastbound, start a square west and go south:)
-        moves #3 GETE moves #2 GET seekobstacle
-        (Southbound, start a square north and go west:)
-        moves #0 GETE moves #3 GET seekobstacle
-        (Westbound, start a square east and go north:)
-        moves #1 GETE moves #0 GET seekobstacle
+        (Move out one square counter to the guard's vector, then turn left 
+         and straight on til morning, for all four directions.)
+        '::
+          moves idx #1 + spin GETE
+          moves idx spin GET seekobstacle 
+          idx #1 + DUP 'idx STO #4 < ;
+        REP
         #4 >LST
         (Record teleport data.)
         xcursor ycursor #3 ROLL put2d 'tports STO ;
-      { ycursor xcursor } LOCAL ;
+      { ycursor xcursor :idx: #0 } LOCAL ;
     
+    (absorbrays: Slightly different raycasting, to update everything
+     pointing at the new obstacle.)
+    ':: 
+      (Hang onto our current location.)
+      '::
+        '::
+          hitx hity
+          (Get our two relevant directions: straight out, and off to the right.)
+          moves idx GET
+          moves idx spin GET
+          '::
+            '::
+              (Take a step and update cursor.)
+              map travel DUP2 'ycursor STO 'xcursor STO
+              (Are we in bounds?)
+              DUP2 bounded
+              '::
+                (We're in bounds, were we free to move this way?)
+                get2d 'objects.obstacle !=
+                '::
+                  (Yes, goooood.  Now let's see if we can look right.)
+                  map peek DUP2 bounded
+                  ':: 
+                    (We can see right.  Is there an obstacle there?)
+                    get2d 'objects.obstacle ==
+                    '::                    
+                      (Fetch the obstacle's map and update it to point to us
+                       in the direction we're headed, e.g.  an east value if
+                       searching east.)
+                      tports DUP peek get2d
+                      hitx hity #2 >LST idx spin PUT
+                      peek #3 ROLL put2d 'tports STO ;
+                    IFT
+                    (Keep looking either way) #1 ;
+                  ':: 
+                    (Can't look right, forget the map and coordinates and stop.)
+                    DROP DROP DROP #0 ; 
+                  IFTE ;
+                (We're done here if we hit an obstacle.) #0
+                IFTE ;
+              ':: (Forget the map and coordinates and stop.) DROP DROP DROP #0 ;
+              IFTE ;
+            REP ;
+          { peek travel ycursor xcursor } LOCAL
+          idx #1 + DUP 'idx STO #4 < ;
+        REP ;
+      { :idx: #0 } LOCAL ;
+    
+
     (The main search section.)
     '::
-      "casting" DISP
+      "Casting original obstacle rays" DISP
       (Cast rays from each obstacle and update its teleport map.)
       obstacles
       ':: OBJ> DROP castrays ;
       FOREACH DROP
-      "seeking" DISP
+      "Seeking through unique obstacle positions" DISP
       uniquesteps LEN
       '::
         '::
           (Local copies of the map and teleports.)
           map tports
           (Get the next obstacle position.)
-          idx #1 - DUP 'idx STO uniquesteps GET OBJ> DROP
-
+          uniquesteps idx #1 - DUP 'idx STO GET OBJ> DROP
+          
           '::
             (Modify our map with the new obstacle.)
             map hitx hity 'objects.obstacle put2d 'map STO
             (Cast rays out from this obstacle.)
             hitx hity castrays
+            
+            (Debug: print our map back to us.
+            map
+            " " hitx * "↓" + hity + DISP
+            ':: ':: 'objects.obstacle == "#" "." IFTE DISPN ; FOREACH DROP " " DISP ; FOREACH
+            DROP)
+            
             (And update the teleport data for any obstacles pointed at us.)
-            hitx hity absorbrays
+            absorbrays
             
             (Now seek north from the start position until hitting an obstacle.)
             startx starty
@@ -318,25 +371,43 @@
               xcursor ycursor moves orientation GET seekobstacle ;
             { ycursor xcursor } LOCAL
             
-            (Bounce around til we leave the map.)
-            ':: boing #1 + 'boing STO
-              tports SWAP OBJ> DROP get2d orientation GET
+            (We should have an obstacle address here.)
+            (Bounce around til we leave the map or hit a given obstacle more
+             than once from the same direction.)
+            '::
+              (Get our current spot from tports, and mark it hit from our
+               direction.)
+              DUP tports SWAP OBJ> DROP get2d DUP orientation GET
+              ( { coords } { spot orientations } { new spot } )
+              SWAP "Done" orientation PUT #3 ROLL OBJ> DROP
+              ( { new spot } { done orientations } coordx coordy )
+              #3 ROLL tports #4 ROLLD put2d 'tports STO
+              ( { new spot } )
               DUP
-              (If the list for our given orientation is not null, advance
-               orientation and repeat.  Otherwise our DUP'd value will tell REP
-               to stop.)
-              ':: spinguard ; IFT ;
-            REP
-            "boing" boing + DISP ;
-          { tports map hity hitx :hitoriented: () :hit: #0 :orientation: #0 } LOCAL 
+              (If we hit this item before, we are in a loop.)
+              "Done" ==
+              '::
+                loops #1 + 'loops STO DROP #0 ;
+              '::
+                (If the item is not null, advance orientation and repeat.)
+                DUP
+                ':: spinguard #1 ;
+                (If it is null, we have left the map and are done.)
+                ':: DROP #0 ;
+                IFTE ;
+              IFTE ;
+            REP ;
+          { hity hitx tports map :orientation: #0 } LOCAL 
           idx ;
         REP ;
-      { idx } LOCAL ;
-    { castrays tports seekobstacle :boing: #0 } LOCAL ;
+      { idx } LOCAL 
+      "Part 2: " loops + DISP ;
+    { absorbrays castrays tports seekobstacle :loops: #0 } LOCAL ;
     
-  { spinguard evalsquare moves objects map
+  { bounded spinguard spin evalsquare moves objects map
     :startx: #0 :starty: #0 :xbound: #0 :ybound: #0 
     :uniquesteps: {} :obstacles: {} } LOCAL ;
+STATICN
 'day06 STO
 
 
@@ -955,6 +1026,7 @@
 
 (Grab from some point to the end of a list or string.)
 ':: SWAP DUP LEN #1 - #3 ROLL SWAP SUBS ;
+STATICN
 'heretoend STO
 
 
@@ -971,10 +1043,12 @@
   ':: DUP y GET thing x PUT y PUT ; { thing y x } LOCAL ;
 'put2d STO
 
+
 (Get thing from a 2d list.)
 '::
   ':: list y GET x GET ; { y x list } LOCAL ;
 'get2d STO
+
 
 (Reverse a list.  This blows up a list and reassembles it,
  using the ability to multiply code.)
