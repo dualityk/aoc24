@@ -1,5 +1,155 @@
 (AOC24 by k.)
 
+(Day 8: y=mx+b, but with the Easter bunny)
+'::
+  (Fetch the input data, and the size of the map we've read in.)
+  "input08" READF POP DROP
+  (Y size:) DUP LEN
+  (X size:) SWAP DUP #0 GET LEN
+  
+  (First, build a list of coordinates sorted by antenna type.  We're just
+   going to use ASCII minus 48, which will make 0 the minimum value, and
+   z will be the maximum value at 74.)
+  '::
+    { {} } #75 *
+    ybound
+    '::
+      '::
+        (Get the next input line.)
+        input idy #1 - DUP 'idy STO GET
+        xbound
+        '::
+          '::
+            (Get a character value.  Is it 0 or above?)
+            text idx #1 - DUP 'idx STO GET ASC> #48 -
+            DUP #0 >=
+            '::
+              (Yes, add coordinates to the appropriate list.)
+              DUP2 GET idx idy #2 >LST #1 >LST + SWAP PUT ;
+            'DROP IFTE
+            idx ;
+          REP ;
+        { idx text } LOCAL idy ;
+      REP ;
+    { idy } LOCAL
+    
+    (Now, make a blank truth map.)
+    { #0 } xbound * #1 >LST ybound *
+    
+    (genpair: Generate a pair of non-interfering coordinates from a pair of
+     antennae.)
+    '::
+      (Shake the coordinates out of the lists we were given.)
+      OBJ> DROP #3 ROLL OBJ> DROP 
+      '::
+        (Obtain a 2x delta.)
+        xa xb - #2 * ya yb - #2 *
+        ':: 
+           xa deltax - ya deltay -
+           xb deltax + yb deltay +
+        ;
+        { deltay deltax } LOCAL ;
+      { yb xb ya xa } LOCAL ;
+    
+    (genrepeat: Generate repeating coordinates in both directions across a
+     line scribed by a pair of antennae.)
+    '::
+      (Save start coordinates, then shake out our lists as before..)
+      DUP #3 ROLLD OBJ> DROP #3 ROLL OBJ> DROP
+      (Generate just a delta pair.)
+      #3 ROLL - #3 ROLLD SWAP -
+      (Unpack the start coordinates again.)
+      #3 ROLL OBJ> DROP
+      '::
+        (First march forward until we hit the wall.)
+        ':: 
+          x deltax multiplier * direction
+          y deltay multiplier * direction
+          DUP2 bounded
+          (Mark every spot we hit and increase our multiplier.)
+          ':: markmap multiplier #1 + DUP 'multiplier STO ; 
+          (If we left the map, forget the coordinates and see if we need to
+           go the other direction still.)
+          ':: DROP DROP 
+            (Reset the multiplier to 1, since we already did 0.)
+            #1 'multiplier STO
+            (See if we already changed the direction.)
+            'direction RCL '- ==
+            (Yes, stop.)
+            #0
+            ':: (No, reverse it and continue.) '- 'direction STO #1 ;
+            IFTE ;
+          IFTE ;
+        REP ;
+      { y x deltax deltay :direction: + :multiplier: #0 } LOCAL ;
+    
+    (runcombos: Evaluate a thing against every combination of two items in a
+     list.  Accepts a list and an evaluator.)
+    '::       
+      (Arrange the stack as we see fit.)
+      SWAP DUP car SWAP cdr DUP LEN
+      (At least two list items are required to play this game:) DUP
+      '::
+        '::
+          (Cycle through each combination of the first and remaining
+           elements.)
+          '::
+            fixedobj list idx #1 - DUP 'idx STO GET evaluator idx ;
+          REP
+          (Save our relevant info from the local context.)
+          list 'evaluator RCL ;
+        { idx list fixedobj evaluator } LOCAL 
+        runcombos ; 
+      ':: #4 DROPN ;
+      IFTE ;
+    
+    (bounded: Check if a pair of coordinates are in bounds.)
+    ':: DUP #0 >= SWAP ybound < AND
+      SWAP DUP #0 >= SWAP xbound < AND AND ;
+
+    (markmap: Store #1 to some location on the truth map.)
+    ':: map #3 ROLLD #1 put2d 'map STO ;
+     
+    '::
+      (Part 1: Plot each antinode and count up the number of unique ones.)
+      antennae
+      '::
+        (Because of how we stored our lists of antennae, we need to skip
+         blank ones.)
+        DUP LEN
+        '::
+          ':: 
+            (We're supplied two { x y } coordinate pairs.  First generate new
+             ones.)
+            genpair 
+            (Then store them both back to the map if they're in bounds.)
+            DUP2 bounded 'markmap ':: DROP DROP ; IFTE
+            DUP2 bounded 'markmap ':: DROP DROP ; IFTE ;
+          runcombos ;
+       'DROP IFTE ; FOREACH DROP
+      
+      (And sum the truths on our map.)
+      #0 map ':: sumlst + ; FOREACH DROP
+      "Part 1: " SWAP + DISP
+      
+      (Part 2: Repeat each antinode to the ends of the map.  There's no need
+       to erase it since all the true parts of the old map will be true on
+       the new one.)
+      antennae
+      '::
+        DUP LEN
+        ':: 'genrepeat runcombos ;
+        'DROP IFTE ; 
+      FOREACH DROP    
+
+      (And sum the truths on our map.)
+      #0 map ':: sumlst + ; FOREACH DROP
+      "Part 2: " SWAP + DISP ;
+    { markmap bounded runcombos genrepeat genpair map antennae } LOCAL ;
+  { xbound input ybound } LOCAL ;
+'day08 STO
+
+
 (Day 7: Doing math by a bridge)
 '::
   (Fetch the input data.)
@@ -88,7 +238,7 @@
   STATICN
     
   (concat: Take the space out between two integers.)
-  ':: >STR SWAP >STR #1 heretoend + >OBJ ;
+  ':: "" + SWAP + >INT ;
   STATICN
   
   '::
@@ -1025,7 +1175,7 @@ STATICN
 
 
 (Grab from some point to the end of a list or string.)
-':: SWAP DUP LEN #1 - #3 ROLL SWAP SUBS ;
+':: SWAP DUP LEN #3 ROLL - RIGHT ;
 STATICN
 'heretoend STO
 
@@ -1037,7 +1187,7 @@ STATICN
 'swapelements STO
 
 
-(Put a thing into a 2D list.)
+(Put a thing into a 2d list.  Accepts list, x, y, thing.)
 '::
   (Quote the thing so it doesn't get evaluated.) QUOTE
   ':: DUP y GET thing x PUT y PUT ; { thing y x } LOCAL ;
@@ -1055,3 +1205,13 @@ STATICN
 '::
   OBJ> ':: SWAP + ; SWAP * {} SWAP EVAL ;
 'revlst STO
+
+
+(Sum a list.)
+':: OBJ> ':: + ; SWAP #1 - * EVAL ;
+'sumlst STO
+
+
+(Lisp functions.)
+':: #0 GET ; 'car STO
+':: #1 heretoend ; 'cdr STO
