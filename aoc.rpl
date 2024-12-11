@@ -1,5 +1,80 @@
 (AOC24 by k.)
 
+(Day 9: Stretching the Christmas metaphor with filesystem fragmentation)
+'::
+  (Fetch once more the input data.  De-interleave it into lists of lengths
+  and free space.)
+  {} {}
+  "input09" READF #0 GET
+  DUP LEN
+  '::
+    '::
+      idx #1 - 'idx STO
+      input idx GET >INT SWAP + SWAP
+      idx ;
+    REP ;
+  { idx input } LOCAL
+
+  (sumrange: Sum a range of natural numbers from x to y.)
+  ( n*[n+1]/2 - [n-1]*n/2 )
+  ':: DUP #1 + * #2 / 
+     SWAP DUP #1 - * #2 / - ;
+
+  (Part one.)
+  '::
+    (Right index.)
+    files LEN
+    '::
+      '::
+        (Check for free space:) free
+        '::
+          (There is free space.  Are there any remaining blocks to move?)
+          part
+          '::
+            (Yes.  Move as many blocks as will fit into the remaining free
+             space, and update the checksum.)
+            diskpos DUP
+            part free lesser
+            (Subtract this value from both remaining block counters.)
+            DUP part SWAP - 'part STO
+            DUP free SWAP - 'free STO            
+            (Move our position pointer by the same amount.)
+            + DUP 'diskpos STO
+            (Write the checksum for the movable portion.) 
+            #1 - sumrange rightidx * sum + 'sum STO ;
+          ':: 
+            (There are no blocks to move, so advance to the next movable
+            file, and fetch its remaining block count.)
+            rightidx #1 - 'rightidx STO 
+            files rightidx GET 'part STO ;
+          IFTE ;
+        '::
+          (There is no free space to fill, get the next fixed file.)
+          (Grab our new free space and remember it.)
+          empty leftidx GET 'free STO
+          (Hang onto the old disk position, then get a fixed file's length.)
+          diskpos DUP
+          files leftidx GET
+          (Our new position is at the end of it:)
+          + DUP 'diskpos STO
+          (Write the checksum for the movable portion.) 
+          #1 - sumrange leftidx * sum + 'sum STO
+          (And move the index right.)
+          leftidx #1 + 'leftidx STO 
+          (If we're at the crossover point, let the partial finish doing its
+           thing regardless.)
+          rightidx leftidx == ':: part 'free STO ; IFT ;
+        IFTE
+        (Repeat until out of both free space and partials.)
+        rightidx leftidx != part OR ;
+      REP
+      "Part 1: " sum + DISP ;
+    { rightidx :leftidx: #0 :sum: #0 :diskpos: #0 :free: #0 :part: #0 }
+    LOCAL ;
+  { sumrange empty files } LOCAL ;
+'day09 STO
+
+
 (Day 8: y=mx+b, but with the Easter bunny)
 '::
   (Fetch the input data, and the size of the map we've read in.)
@@ -1215,3 +1290,7 @@ STATICN
 (Lisp functions.)
 ':: #0 GET ; 'car STO
 ':: #1 heretoend ; 'cdr STO
+
+
+(Pick the lesser of two items.)
+':: DUP2 < #3 ROLLD IFTE ; 'lesser STO
