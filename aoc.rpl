@@ -6,7 +6,6 @@
   and free space.)
   {} {}
   "input09" READF #0 GET
-  (DROP "2333133121414131402")
   DUP LEN
   '::
     '::
@@ -134,7 +133,7 @@
         (Grab the size of the next file.)
         files rightidx GET
         (Determine the leftmost place it can move, using the cache.)
-        DUP cache SWAP heretoend ':: lesser ; evalagainst
+        DUP cache SWAP GET
         '::
           (Is that place in range?)
           cursor rightidx <=
