@@ -6,6 +6,7 @@
   and free space.)
   {} {}
   "input09" READF #0 GET
+  (DROP "2333133121414131402")
   DUP LEN
   '::
     '::
@@ -70,6 +71,121 @@
       REP
       "Part 1: " sum + DISP ;
     { rightidx :leftidx: #0 :sum: #0 :diskpos: #0 :free: #0 :part: #0 }
+    LOCAL 
+
+    (Part 2: Move only complete files to compact disk.)
+    (Make one pass to generate our initial cache of search positions,
+     as well as the absolute position of un-moved files and the beginning
+     of free space.)
+    empty LEN
+    '::
+      (Disk position begins:) #0
+      '::
+        (Check to see if it's time to update our cache.)
+        empty cursor GET DUP cachepos >=
+        '::
+          (We found a new cache entry.  Append as many to the list as
+           needed.)
+          '::
+            cursor cache SWAP + 'cache STO
+            cachepos #1 + 'cachepos STO 
+            DUP cachepos >= ;
+          REP ;
+        IFT DROP
+        
+        (Grab the file size at our cursor.)
+        files cursor GET
+        (Record the current disk position as the beginning of the file.)
+        SWAP DUP filepos SWAP + 'filepos STO
+        (And the end of it as the beginning of free space.)
+        + DUP emptypos SWAP + 'emptypos STO
+        (Then advance past the free space.)
+        empty cursor GET +
+        
+        cursor #1 + DUP 'cursor STO max <  ;
+      REP
+      (Now write out the final file position, flesh out the cache, and return 
+       everything.)
+      filepos SWAP +
+      emptypos
+      cache DUP LEN #11 SWAP - max #1 >LST SWAP * + ;
+    { max :cache: {} :cachepos: #0 :filepos: {} :emptypos: {} :cursor: #0 } 
+    LOCAL
+    
+    (storefile: Record the checksum for the current file at an indicated
+     position.)
+    '::
+      ':: 
+        (Store checksum.)
+        emptypos position GET DUP size + #1 -
+        sumrange fileid *
+        sum + 'sum STO
+        (Deduct free space from new position.)
+        empty DUP position GET size - position PUT 'empty STO 
+        (And update list of starting positions.)
+        emptypos DUP position GET size + position PUT 'emptypos STO ;
+      { position fileid } LOCAL ;
+      
+    files LEN
+    '::
+      '::
+        (Move right index one stop left.)
+        rightidx #1 - 'rightidx STO
+        (Grab the size of the next file.)
+        files rightidx GET
+        (Determine the leftmost place it can move, using the cache.)
+        DUP cache SWAP heretoend ':: lesser ; evalagainst
+        '::
+          (Is that place in range?)
+          cursor rightidx <=
+          '::
+            (Store the file in this position.)
+            rightidx cursor storefile
+            (And update the cache by searching from there to rightidx for the
+             next matching empty space of the size we just left, as well as
+             any larger cache entries we may have clobbered.)
+            empty cursor GET 'size STO
+            cache size GET 'cursor STO
+            '::
+              (Check the empty space under our cursor to see if it meets
+               the criteria.)
+              cursor rightidx <
+              ':: empty cursor GET size >= ;
+              #0 IFTE
+              '::
+                (It does, so update the cache, advance to the next larger
+                 file size, and continue until the cache is fully updated.
+                 The next cache entry will always be to the right, so
+                 we're searching incrementally by resetting the cursor to
+                 the next cached value if it's greater than the present one.)
+                cache cursor size PUT 'cache STO  
+                size #1 + DUP 'size STO #10 < 
+                cache size GET cursor greater 'cursor STO ;
+              '::
+                (It doesn't: continue seeking until we hit the search
+                 limit.)
+                cursor #1 + DUP 'cursor STO rightidx < 
+                DUP NOT 
+                ':: 
+                  (We hit the limit, so invalidate this entry and advance,
+                   which will invalidate all subsequent entries.)
+                   rightidx 'cursor STO
+                  DROP cache cursor size PUT 'cache STO
+                  size #1 + DUP 'size STO #10 < ;
+                IFT ;
+              IFTE ;
+            REP ;
+          '::
+            (No, store the file in its original position.)
+            filepos rightidx GET DUP size + #1 -
+            sumrange rightidx *
+            sum + 'sum STO ;
+          IFTE ;
+        { cursor size } LOCAL
+        (And repeat until we are out of files to move.)
+        rightidx ;  
+      REP "Part 2: " sum + DISP ;
+    { rightidx storefile cache emptypos filepos :sum: #0 }
     LOCAL ;
   { sumrange empty files } LOCAL ;
 'day09 STO
@@ -1294,3 +1410,12 @@ STATICN
 
 (Pick the lesser of two items.)
 ':: DUP2 < #3 ROLLD IFTE ; 'lesser STO
+
+
+(Pick the greater of two items.)
+':: DUP2 > #3 ROLLD IFTE ; 'greater STO
+
+
+(Evaluate a thing against every item in a list.  Accepts code and a list.)
+':: SWAP DUP LEN #1 - #3 ROLL SWAP * ':: OBJ> DROP ; SWAP + EVAL ;
+'evalagainst STO
