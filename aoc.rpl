@@ -1,5 +1,41 @@
 (AOC24 by k.)
 
+(Day 11: Just bring me the stones.  You have one hour.  This solution is
+ unfinished and very bad.)
+'::
+  "input11" READF #0 GET
+  ("125 17")
+  " " SPLIT
+  
+  (rules: A kcase structure representing all the stone's mogrifying rules.)
+  { { :: TYPE Types.List == ; 
+      :: _k dorules idx PUT ; }
+    { :: "0" == ;
+      :: "1" idx PUT ; }
+    { :: LEN ODD NOT ;
+      :: _k DUP LEN #2 / DUP2 
+         LEFT #3 ROLLD RIGHT >INT "" + #3 ROLLD idx PUT DUP
+         idx #1 + DUP 'idx STO LEFT 
+         #3 ROLLD idx heretoend + + 
+         max #1 + 'max STO ; }
+    { #1
+      :: >INT #2024 * "" + idx PUT ; } }
+  
+  (dorules: Run the rules against a list one time.)
+  ':: DUP LEN
+    '::
+      '::
+        DUP idx GET rules KCASE      
+        idx #1 + DUP 'idx STO max < ;
+      REP ;
+    { max :idx: #0 }
+    LOCAL ;
+    
+  ':: (main) list ':: dorules DUP LEN DISP ; #25 * EVAL LEN ;
+  { dorules rules list } LOCAL ;
+'day11 STO
+
+
 (Day 10: Less than stellar cartography)
 '::
   (Turn the input data into an integer array.)
@@ -16,17 +52,6 @@
   FOREACH
   (Hang onto the dimensions.)
   DUP LEN SWAP DUP #0 GET LEN SWAP
-
-  (paint: For each valid cardinal direction from a given start point,
-   evaluate an object against new X and Y coordinates.  Accepts an evaluator
-   and start coordinates.)
-  ':: 
-    '::
-      x y #1 - DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
-      x #1 + y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
-      x y #1 + DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
-      x #1 - y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE ;
-    { evaluator } LOCAL ;
 
   (ascend: Recursively paint our way to the top of a trail.)
   '::
@@ -1525,7 +1550,20 @@ STATICN
 'evalagainst STO
 
 
-(bounded: Check if a pair of coordinates are in bounds.)
+(Check if a pair of coordinates are in bounds.)
 ':: DUP #0 >= SWAP ybound < AND
   SWAP DUP #0 >= SWAP xbound < AND AND ;
 'bounded STO
+
+
+(For each valid cardinal direction from a given start point,
+ evaluate an object against new X and Y coordinates.  Accepts an evaluator
+ and start coordinates.)
+':: 
+  '::
+    x y #1 - DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+    x #1 + y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+    x y #1 + DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+    x #1 - y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE ;
+  { evaluator } LOCAL ;
+'paint STO
