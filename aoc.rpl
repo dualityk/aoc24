@@ -1,5 +1,118 @@
 (AOC24 by k.)
 
+(Day 10: Less than stellar cartography)
+'::
+  (Turn the input data into an integer array.)
+  "input10" READF POP DROP
+  '::
+    DUP LEN
+    '::
+      (A single row:) {}
+      '::
+        text cursor GET >INT +
+        cursor #1 + DUP 'cursor STO max < ; 
+      REP update ;
+    { max text :cursor: #0 } LOCAL ;
+  FOREACH
+  (Hang onto the dimensions.)
+  DUP LEN SWAP DUP #0 GET LEN SWAP
+
+  (paint: For each valid cardinal direction from a given start point,
+   evaluate an object against new X and Y coordinates.  Accepts an evaluator
+   and start coordinates.)
+  ':: 
+    '::
+      x y #1 - DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+      x #1 + y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+      x y #1 + DUP2 bounded 'evaluator ':: DROP DROP ; IFTE
+      x #1 - y DUP2 bounded 'evaluator ':: DROP DROP ; IFTE ;
+    { evaluator } LOCAL ;
+
+  (ascend: Recursively paint our way to the top of a trail.)
+  '::
+    (Hang onto our sought number.)
+    seeking
+    '::
+      (Is the tile we're on the number we're seeking?)
+      map x y get2d DUP seeking ==
+      ':: 
+        (We should be here.  Are we at the summit?) 
+        summit == 
+        '::
+          (We are at the summit, so add an ID for this site to our list.)
+          x y ybound * + + ;
+        '::
+          (We have yet to summit, so continue to ascend.)
+          seeking #1 + 'seeking STO
+          'ascend paint ;
+        IFTE ;
+      'DROP
+      IFTE ;
+    { seeking y x } LOCAL ;
+
+  (uniques: Count up the number of unique items in a list.)
+  '::
+    (Sort the list first.)
+    sort
+    DUP LEN DUP
+    '::
+      (We have at least one item.  Do we have two?)
+      #1 - DUP
+      '::
+        (Yes.)
+        '::
+          (Our unique count begins here:) #1
+          '::
+            (Compare current item with previous item, move the cursor,
+             and add the inequality to our count of uniqueness.)
+            list size GET
+            list size #1 - DUP 'size STO GET
+            != + 
+            size ;
+          REP ; 
+        { size list } LOCAL ;
+      ':: (One item means one unique item.) DROP DROP #1 ;
+      IFTE ;
+    (No items means no uniqueness.)
+    ':: DROP DROP #0 ;
+    IFTE ;
+  
+  '::
+    (Part 1: Cataloging ways to the summit.)
+    (Also part 2: Doing that some more in a way that was coincidentally
+     straightforward with this original code.)
+    (Part one's tally is here:) #0
+    ybound
+    '::
+      '::
+        y #1 - 'y STO
+        xbound      
+        '::
+          '::
+            x #1 - 'x STO
+            (We only care about zero altitude squares for this one.)
+            map x y get2d NOT
+            '::
+              (A zero was found, so we start here.)
+              (Our list of summits:) {}
+              x y ascend 
+              (This is the part 2 thing.)
+              DUP LEN allsummits + 'allsummits STO
+              (Find just the number of unique values in the returned list.)
+              uniques + ;
+            IFT
+            x ;
+          REP ;  
+        { x :seeking: #0 :summit: #9 } LOCAL 
+        y ;
+      REP ;
+    { y } LOCAL 
+    "Part 1: " SWAP + DISP 
+    "Part 2: " allsummits + DISP ;
+  { uniques ascend paint map xbound ybound :allsummits: #0 } LOCAL ;
+'day10 STO
+
+
 (Day 9: Stretching the Christmas metaphor with filesystem fragmentation)
 '::
   (Fetch once more the input data.  De-interleave it into lists of lengths
@@ -293,10 +406,6 @@
       ':: #4 DROPN ;
       IFTE ;
     
-    (bounded: Check if a pair of coordinates are in bounds.)
-    ':: DUP #0 >= SWAP ybound < AND
-      SWAP DUP #0 >= SWAP xbound < AND AND ;
-
     (markmap: Store #1 to some location on the truth map.)
     ':: map #3 ROLLD #1 put2d 'map STO ;
      
@@ -335,7 +444,7 @@
       (And sum the truths on our map.)
       #0 map ':: sumlst + ; FOREACH DROP
       "Part 2: " SWAP + DISP ;
-    { markmap bounded runcombos genrepeat genpair map antennae } LOCAL ;
+    { markmap runcombos genrepeat genpair map antennae } LOCAL ;
   { xbound input ybound } LOCAL ;
 'day08 STO
 
@@ -529,10 +638,6 @@
 
   (spinguard: Rotate the guard specifically.)
   ':: orientation spin 'orientation STO ;
-
-  (bounded: Default bounds check to make sure stack coordinates are in the map.)
-  ':: DUP #0 >= SWAP ybound < AND
-    SWAP DUP #0 >= SWAP xbound < AND AND ;
 
   '::
     (Record the size of the map.)
@@ -744,7 +849,7 @@
       "Part 2: " loops + DISP ;
     { absorbrays castrays tports seekobstacle :loops: #0 } LOCAL ;
     
-  { bounded spinguard spin evalsquare moves objects map
+  { spinguard spin evalsquare moves objects map
     :startx: #0 :starty: #0 :xbound: #0 :ybound: #0 
     :uniquesteps: {} :obstacles: {} } LOCAL ;
 STATICN
@@ -1418,3 +1523,9 @@ STATICN
 (Evaluate a thing against every item in a list.  Accepts code and a list.)
 ':: SWAP DUP LEN #1 - #3 ROLL SWAP * ':: OBJ> DROP ; SWAP + EVAL ;
 'evalagainst STO
+
+
+(bounded: Check if a pair of coordinates are in bounds.)
+':: DUP #0 >= SWAP ybound < AND
+  SWAP DUP #0 >= SWAP xbound < AND AND ;
+'bounded STO
