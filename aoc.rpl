@@ -1,5 +1,164 @@
 (AOC24 by k.)
 
+(Day 12: Paint by number agriculture.  Works, but messy.  I have to remember
+ not to try to rewrite these things once I get the correct answer.  The two
+ major bugs I fought with were not properly recording wall positions for
+ map-edge walls, and a silly use-before-define error with 'flow', the
+ variable used to pick which set of walls is being written to.)
+'::
+  "input12" READF POP DROP
+  (Read the input data into an array of ASCII values.)
+  '::
+    DUP LEN
+    '::
+      (A single row:) {}
+      '::
+        text cursor GET ASC> +
+        cursor #1 + DUP 'cursor STO max < ; 
+      REP update ;
+    { max text :cursor: #0 } LOCAL ;
+  FOREACH
+  (Hang onto the dimensions.)
+  DUP LEN SWAP DUP #0 GET LEN SWAP
+
+  ':: 
+    '::
+      #0 'flow STO
+      x y #1 - DUP2 bounded 'evaluator 'outtabounds IFTE
+      #1 'flow STO
+      x #1 + y DUP2 bounded 'evaluator 'outtabounds IFTE
+      #2 'flow STO
+      x y #1 + DUP2 bounded 'evaluator 'outtabounds IFTE
+      #3 'flow STO
+      x #1 - y DUP2 bounded 'evaluator 'outtabounds IFTE ;
+    { outtabounds evaluator } LOCAL ;
+
+  (writeperimeter: Add to our perimeter tally, but also record to our many
+   lists of places fences may be found.)
+  '::
+    (First record the tally.)
+    perimeter #1 + 'perimeter STO
+    (Then fetch the big book.  Odd flows mean we're traveling on the X axis.)
+    findings DUP flow GET flow ODD
+    (The indices are offset to write walls to off-map locations.)
+    '::
+      (This means we're getting the X list and putting the Y value in it.)
+      DUP x #1 + GET y  + x #1 + PUT ;
+    '::
+      (Otherwise, we're getting the Y list and putting the X value in it.)
+      DUP y #1 + GET x  + y #1 + PUT ;
+    IFTE
+    flow PUT 'findings STO ;
+
+  (uniques: Count up the number of unique items in a list.)
+  '::
+    (Sort the list first.)
+    sort 
+    DUP LEN DUP
+    '::
+      (We have at least one item.  Do we have two?)
+      #1 - DUP
+      '::
+        (Yes.)
+        '::
+          (Our unique count begins here:) #1
+          '::
+            (Compare current item with previous item, move the cursor,
+             and add the inequality to our count of uniqueness. In this
+             case, the previous item must be one less than the next item,
+             e.g. a string of adjoining tiles will count as one thing.)
+            list size GET
+            list size #1 - DUP 'size STO GET #1 +
+            != + 
+            size ;
+          REP ; 
+        { size list } LOCAL ;
+      ':: (One item means one unique item.) DROP DROP #1 ;
+      IFTE ;
+    (No items means no uniqueness.)
+    ':: DROP DROP #0 ;
+    IFTE ;
+  
+  (uniquesides: Use findings to determine unique number of sides.)
+  '::
+    (First consolidate the findings into a big list, because we no longer
+     actually care about directions.)
+    findings OBJ> DROP + + +
+    DUP LEN
+    '::
+      (Our tally begins at:) #0
+      '::
+        biglist idx #1 - DUP 'idx STO GET
+        (For each finding, use our modified uniques routine to tally all
+         unique fencelines between each column or row.)        
+        uniques +
+        idx ;
+      REP ;
+    { idx biglist } LOCAL ;
+    
+  (survey: For starting coordinates, paint an area negative and return the
+   number of tiles found and the number of edges found.)
+  '::
+    (Save the tile we're coming from too.) 
+    y x
+    '::
+      (Get the current object.  Is it someplace we've been?)
+      map x y get2d DUP NEG match !=
+      ':: 
+        (We haven't been here.  Does this match our tile?)
+        match ==
+        ':: (It matches, so mark it covered, increment our area and recurse.)
+          map x y match NEG put2d 'map STO
+          area #1 + 'area STO
+          (Either recurse if we're in bounds, or just record the perimeter.)
+          'survey ':: ':: writeperimeter ; { y x } LOCAL ; paint ;
+        (It doesn't match, so increment our perimeter only.)
+        'writeperimeter
+        IFTE ;
+      (We've been here, so forget it entirely.) 'DROP 
+      IFTE ;
+    { lastx lasty y x } LOCAL ;
+     
+  '::
+    (Part 1 sum starts here:) #0
+    ybound
+    '::
+      '::
+        y #1 - 'y STO
+        xbound
+        '::
+          '::
+            x #1 - 'x STO
+            map x y get2d DUP #0 >
+            '::
+              (We found a new patch to paint, so set our match number and
+               get after it.)
+              (For the second part of the problem, we also need to record
+               some information about where we found perimeter lines.)
+              { {} } xbound #2 + * #1 >LST 
+              { {} } ybound #2 + * #1 >LST + #2 *
+              ':: 
+                x y survey area perimeter 
+                (For part 2, we want the area*unique sides.)
+                part2tally uniquesides area * + 'part2tally STO ; 
+              { findings match :area: #0 :perimeter: #0 :flow: eggog } 
+              LOCAL 
+              (And add what we found to the ongoing sum.) * + ;
+            'DROP
+            IFTE
+            x ;
+          REP ;  
+        { x } LOCAL 
+        y ;
+      REP ;
+    { y } LOCAL 
+    "Part 1: " SWAP + DISP 
+    "Part 2: " part2tally + DISP ;
+  { survey uniquesides uniques writeperimeter paint map xbound ybound 
+    :part2tally: #0 } LOCAL ;
+'day12 STO
+
+
 (Day 11: Just bring me the stones.  You have one hour.  This solution is
  unfinished and very bad.)
 '::
