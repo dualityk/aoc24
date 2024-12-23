@@ -1,5 +1,125 @@
 (AOC24 by k.)
 
+(Day 22: Back on the boat for a little hex calculator action in the jungle.)
+'::
+  (Get our input and make it integers.)
+  "input22" READF POP DROP
+  ':: >INT update ; FOREACH
+  
+  (confabulate: Generate the next secret number.)
+  ':: 
+    (Multiply by 64, XOR, and trim to 24 bits.)
+    DUP #6 BSHL BXOR #16777215 BAND
+    (Divide by 32, XOR.)
+    DUP #5 BSHR BXOR
+    (Multiply by 2048, XOR, and trim.)
+    DUP #11 BSHL BXOR #16777215 BAND ;
+  STATICN
+  
+  (confab2k: Generate the 2000th secret number.)
+  ':: confabulate ; #2000 *
+  
+  '::
+    (Part 1: Adding up the secrets.)
+    (Our tally begins here:) #0
+    input ':: confab2k + ; FOREACH DROP
+    "Part 1: " SWAP + DISP ;
+  { confab2k confabulate input } LOCAL ;
+'day22 STO
+
+
+(Day 17: Writing an emulator for some reason.)
+'::
+  (combo: Operand decoder for combo operations.)
+  { #0 #1 #2 #3 regA regB regC hcf }
+
+  (instructions: Each machine instruction by number.)
+  { :: (adv: divide A by 2^operand, result into A.)
+      regA combo operand GETE BSHR 'regA STO ;
+    :: (bxl: XOR B with literal, result into B.)
+      regB operand BXOR 'regB STO ;
+    :: (bst: Store lower 3 bits of combo to B.)
+      combo operand GETE #7 BAND 'regB STO ;
+    :: (jnz: Jump if not zero.)
+      regA ':: combo operand GETE 'regIP STO ; IFT ;
+    :: (bxc: B XOR C, result into B.)
+      regB regC BXOR 'regB STO ;
+    :: (out: Write lower 3 bits of combo.)
+      combo operand GETE #7 BAND + ;
+    :: (bdv: divide A by 2^operand, result into B.)
+      regA combo operand GETE BSHR 'regB STO ;  
+    :: (cdv: divide A by 2^operand, result into C.)
+      regA combo operand GETE BSHR 'regC STO ; }
+  
+  (trace: remove me)
+  ':: regIP #2 / " regA " + regA + 
+    " regB " + regB #7 BAND (reg B is always one word) +
+    " regC " + regC + DISP ;
+  
+  '::
+    (Part one: run it straight.)
+    (Output goes here:) {}
+    '::  trace
+      (Get operand.)
+      memory regIP #1 + GET 'operand STO
+      (Get instruction and move advance IP.)
+      instructions memory regIP GET
+      regIP #2 + 'regIP STO
+      (Evaluate instruction.)
+      GETE
+      (And repeat until we have left memory.)
+      regIP top < ;
+    REP trace ;
+  { trace instructions combo
+    :regIP: #0 :regA: #21539243 :regB: #0 :regC: #0
+    :memory: { #2 #4 #1 #3 #7 #5 #1 #5 #0 #3 #4 #1 #5 #5 #3 #0 }
+    :top: #16 } LOCAL ;
+'day17 STO
+
+
+(Day 13: The clawwww.)
+'::
+  "input13full" READF
+  '::
+    {}
+    '::
+      (Progressively munch the button numbers.)
+      input idx GET
+      "+" SPLIT #2 RIGHT DUP #0 GET "," SPLIT #0 GET #0 PUT
+      input idx #1 + DUP 'idx STO GET
+      "+" SPLIT #2 RIGHT DUP #0 GET "," SPLIT #0 GET #0 PUT +
+      (And the prize values.)
+      input idx #1 + DUP 'idx STO GET
+      "=" SPLIT #2 RIGHT DUP #0 GET "," SPLIT #0 GET #0 PUT +
+      (Integerate them.)
+      ':: >INT update ; FOREACH
+      (Concatenate them.)
+      #1 >LST +
+      (Advance until we find a null line.)
+      idx #2 + DUP 'idx STO input LEN < ;
+    REP ;
+  { input :idx: #0 } LOCAL
+  
+  (gameenv: Make a local environment with sensible variable names.  Takes a
+   game list, and code.)
+  ':: SWAP OBJ> DROP #7 ROLL
+    { prizey prizex by bx ay ax } LOCAL ;
+
+  (cksanity: See if the maximum button mashing will overshoot our prize. If
+   it can't, the game is rigged for sure.  For part 1 this knocks out half
+   the games.)
+  ':: ax #100 * bx #100 * + prizex >=
+    ay #100 * by #100 * + prizey >= AND ;
+  
+  
+  
+  '::
+    #0 allgames ':: ':: cksanity + ; gameenv ; FOREACH DROP 
+	   DISP allgames LEN DISP ;
+  { cksanity gameenv allgames } LOCAL ;
+'day13 STO
+
+
 (Day 12: Paint by number agriculture.  Works, but messy.  I have to remember
  not to try to rewrite these things once I get the correct answer.  The two
  major bugs I fought with were not properly recording wall positions for
@@ -21,6 +141,8 @@
   (Hang onto the dimensions.)
   DUP LEN SWAP DUP #0 GET LEN SWAP
 
+  (paint: Recurse around the map, looking for things to paint.  Accepts an
+   evaluator for in bound tiles, and an evaluator for out of bound tiles.)
   ':: 
     '::
       #0 'flow STO
@@ -99,8 +221,6 @@
   (survey: For starting coordinates, paint an area negative and return the
    number of tiles found and the number of edges found.)
   '::
-    (Save the tile we're coming from too.) 
-    y x
     '::
       (Get the current object.  Is it someplace we've been?)
       map x y get2d DUP NEG match !=
@@ -117,7 +237,7 @@
         IFTE ;
       (We've been here, so forget it entirely.) 'DROP 
       IFTE ;
-    { lastx lasty y x } LOCAL ;
+    { y x } LOCAL ;
      
   '::
     (Part 1 sum starts here:) #0
